@@ -3,7 +3,7 @@ import { AIProvider, Model, ChatConfig } from "./types";
 export const lmstudio: AIProvider = {
   name: "LM Studio",
   id: "lmstudio",
-  baseUrl: process.env.LMSTUDIO_URL || "http://192.168.0.177:1234/v1",
+  baseUrl: process.env.LMSTUDIO_URL || "http://192.168.0.177:6969/v1",
   requiresKey: false,
 
   async validateKey(): Promise<boolean> {
