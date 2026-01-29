@@ -34,7 +34,7 @@ export class ConversationEngine {
     const speaker = this.turnManager.getNextSpeaker()
     const messages = this.turnManager.buildPrompt(speaker)
     
-    const provider = getProvider(speaker.provider)
+    const provider = getProvider(speaker.provider as any)
     if (!provider) {
       throw new Error(`Provider ${speaker.provider} not found`)
     }
@@ -50,8 +50,7 @@ export class ConversationEngine {
         messages,
         temperature: speaker.temperature,
         maxTokens: speaker.maxTokens,
-        apiKey,
-      })
+      }, apiKey)
 
       for await (const chunk of stream) {
         fullContent += chunk
