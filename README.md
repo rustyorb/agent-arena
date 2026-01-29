@@ -114,9 +114,9 @@ agent-arena/
 | Provider | Base URL | Notes |
 |----------|----------|-------|
 | OpenRouter | https://openrouter.ai/api/v1 | Access to 100+ models |
-| Anthropic | https://api.anthropic.com/v1 | Claude 3.5 Sonnet, Opus |
-| OpenAI | https://api.openai.com/v1 | GPT-4, GPT-3.5 |
-| X.AI | https://api.x.ai/v1 | Grok-2 |
+| Anthropic | https://api.anthropic.com/v1 | Claude Sonnet 4.5, Opus 4.5 |
+| OpenAI | https://api.openai.com/v1 | GPT-5.2, GPT-4.1, GPT-4o |
+| X.AI | https://api.x.ai/v1 | Grok-3 |
 
 ### Local Providers
 
