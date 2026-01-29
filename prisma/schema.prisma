@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Persona {
+  id           String   @id @default(cuid())
+  name         String
+  avatar       String?
+  systemPrompt String
+  position     String?
+  temperature  Float    @default(0.7)
+  maxTokens    Int      @default(1024)
+  provider     String
+  model        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  title     String
+  topic     String
+  mode      String
+  personas  String    // JSON array of persona IDs
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  personaId      String
+  personaName    String
+  model          String
+  content        String
+  createdAt      DateTime     @default(now())
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  provider    String    @unique
+  key         String    // encrypted
+  models      String?   // cached JSON
+  validatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
