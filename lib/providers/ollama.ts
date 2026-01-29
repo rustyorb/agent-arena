@@ -3,7 +3,7 @@ import { AIProvider, Model, ChatConfig } from "./types";
 export const ollama: AIProvider = {
   name: "Ollama",
   id: "ollama",
-  baseUrl: "http://localhost:11434",
+  baseUrl: process.env.OLLAMA_URL || "http://192.168.0.177:11434",
   requiresKey: false,
 
   async validateKey(): Promise<boolean> {
