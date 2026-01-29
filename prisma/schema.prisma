@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -30,6 +27,7 @@ model Conversation {
   topic     String
   mode      String
   personas  String    // JSON array of persona IDs
+  status    String    @default("created") // created, running, paused, stopped
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
@@ -49,7 +47,7 @@ model Message {
 model ApiKey {
   id          String    @id @default(cuid())
   provider    String    @unique
-  key         String    // encrypted
+  key         String
   models      String?   // cached JSON
   validatedAt DateTime?
   createdAt   DateTime  @default(now())
