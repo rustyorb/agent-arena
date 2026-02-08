@@ -122,9 +122,9 @@ export class TurnManager {
 
     const lastSpeaker = this.history[this.history.length - 1]
     const lastPersona = this.personas.find(p => p.id === lastSpeaker.personaId)
-    
+
     // Find next persona with different position (or just next one)
-    const otherPersonas = this.personas.filter(p => 
+    const otherPersonas = this.personas.filter(p =>
       p.id !== lastPersona?.id && p.position !== lastPersona?.position
     )
 
@@ -132,8 +132,9 @@ export class TurnManager {
       return otherPersonas[0]
     }
 
-    // Fallback to round robin
-    return this.getRoundRobinSpeaker()
+    // Fallback: pick next persona in order without incrementing shared index
+    const lastIndex = this.personas.findIndex(p => p.id === lastSpeaker.personaId)
+    return this.personas[(lastIndex + 1) % this.personas.length]
   }
 
   private getInterviewSpeaker(): Persona {
@@ -143,11 +144,13 @@ export class TurnManager {
     }
 
     const lastSpeaker = this.history[this.history.length - 1]
-    
+
     // If interviewer just spoke, pick next interviewee
     if (lastSpeaker.personaId === this.personas[0].id) {
       const interviewees = this.personas.slice(1)
-      return interviewees[this.currentIndex % interviewees.length]
+      const speaker = interviewees[this.currentIndex % interviewees.length]
+      this.currentIndex++
+      return speaker
     }
 
     // Otherwise, back to interviewer
@@ -170,7 +173,9 @@ export class TurnManager {
       return candidates[0]
     }
 
-    // Fallback to round robin
-    return this.getRoundRobinSpeaker()
+    // Fallback: pick next persona in order without incrementing shared index
+    const lastSpeakerId = this.history[this.history.length - 1].personaId
+    const lastIndex = this.personas.findIndex(p => p.id === lastSpeakerId)
+    return this.personas[(lastIndex + 1) % this.personas.length]
   }
 }

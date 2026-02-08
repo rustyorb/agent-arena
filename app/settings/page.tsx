@@ -115,7 +115,7 @@ export default function SettingsPage() {
   const updateKey = (providerId: string, key: string) => {
     setProviders((prev) =>
       prev.map((p) =>
-        p.id === providerId ? { ...p, key, status: key ? "unconfigured" : "unconfigured" } : p
+        p.id === providerId ? { ...p, key, status: "unconfigured" as ProviderStatus } : p
       )
     );
   };
