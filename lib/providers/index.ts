@@ -3,6 +3,7 @@ import { openrouter } from "./openrouter";
 import { anthropic } from "./anthropic";
 import { openai } from "./openai";
 import { xai } from "./xai";
+import { openclaw } from "./openclaw";
 import { lmstudio } from "./lmstudio";
 import { ollama } from "./ollama";
 
@@ -11,6 +12,7 @@ export const providers: Record<ProviderId, AIProvider> = {
   anthropic,
   openai,
   xai,
+  openclaw,
   lmstudio,
   ollama,
 };

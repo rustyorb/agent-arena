@@ -23,6 +23,7 @@ const INITIAL_PROVIDERS: ProviderConfig[] = [
   { id: "anthropic", name: "Anthropic", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
   { id: "openai", name: "OpenAI", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
   { id: "xai", name: "X.AI (Grok)", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
+  { id: "openclaw", name: "OpenClaw", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
   { id: "lmstudio", name: "LM Studio", requiresKey: false, status: "unconfigured", key: "", modelCount: 0 },
   { id: "ollama", name: "Ollama", requiresKey: false, status: "unconfigured", key: "", modelCount: 0 },
 ];

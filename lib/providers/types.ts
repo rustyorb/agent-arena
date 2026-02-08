@@ -30,9 +30,10 @@ export interface AIProvider {
 
 export const PROVIDERS = [
   "openrouter",
-  "anthropic", 
+  "anthropic",
   "openai",
   "xai",
+  "openclaw",
   "lmstudio",
   "ollama"
 ] as const;
