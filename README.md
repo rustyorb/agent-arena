@@ -294,9 +294,9 @@ agent-arena/
 | Provider | Endpoint | Auth Header | Models |
 |---|---|---|---|
 | **OpenRouter** | `https://openrouter.ai/api/v1` | `Authorization: Bearer` | 100+ models from many labs |
-| **Anthropic** | `https://api.anthropic.com/v1` | `x-api-key` | Claude Sonnet, Opus, Haiku |
-| **OpenAI** | `https://api.openai.com/v1` | `Authorization: Bearer` | GPT-4o, GPT-4, GPT-3.5 |
-| **X.AI** | `https://api.x.ai/v1` | `Authorization: Bearer` | Grok |
+| **Anthropic** | `https://api.anthropic.com/v1` | `x-api-key` | Claude model family |
+| **OpenAI** | `https://api.openai.com/v1` | `Authorization: Bearer` | GPT model family |
+| **X.AI** | `https://api.x.ai/v1` | `Authorization: Bearer` | Grok model family |
 
 ### Local Providers
 
@@ -507,7 +507,7 @@ The `chat()` method is an `AsyncGenerator<string>` that yields streaming text ch
 3. Accept the defaults (Next.js preset) and click **Deploy**.
 
 > [!CAUTION]
-> Vercel's file system is **read-only** in production. SQLite will not persist across deployments. For production use, switch to PostgreSQL (Vercel Postgres, PlanetScale, or Supabase) by updating `prisma/schema.prisma`:
+> Vercel's file system is **read-only** in production. SQLite data **will be lost on every deployment and serverless cold start**. For production use, switch to PostgreSQL (Vercel Postgres, PlanetScale, or Supabase) by updating `prisma/schema.prisma`:
 > ```prisma
 > datasource db {
 >   provider = "postgresql"
