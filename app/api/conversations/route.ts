@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
       topic: body.topic,
       mode: body.mode,
       personas: JSON.stringify(body.personas),
+      judgeId: body.judgeId || null,
       status: "created",
     },
   });

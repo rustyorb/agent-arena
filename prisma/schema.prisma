@@ -27,6 +27,8 @@ model Conversation {
   topic     String
   mode      String
   personas  String    // JSON array of persona IDs
+  judgeId   String?   // persona ID acting as AI judge (not a combatant)
+  scores    String?   // JSON scoreboard accumulated by judge rounds
   status    String    @default("created") // created, running, paused, stopped
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -41,6 +43,7 @@ model Message {
   personaName    String
   model          String
   content        String
+  isJudge        Boolean      @default(false) // judge verdict messages
   createdAt      DateTime     @default(now())
 }
 
