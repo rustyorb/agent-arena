@@ -394,7 +394,7 @@ interface AIProvider {
 ```
 
 > [!NOTE]
-> Local provider URLs are configurable via `LMSTUDIO_URL`, `OLLAMA_URL`, and `OPENCLAW_URL` env vars. The in-repo defaults for LM Studio/Ollama point at a LAN host IP (a WSL2-era artifact) — set the env vars to match your setup.
+> **Every provider's API URL is editable on `/settings`** — prefilled with the vendor default, overridable per-browser (stored alongside your keys in `localStorage`). Ollama on another box? LM Studio on a weird port? Point and shoot. Env vars (`LMSTUDIO_URL`, `OLLAMA_URL`, `OPENCLAW_URL`) still work as server-side fallbacks.
 
 ---
 

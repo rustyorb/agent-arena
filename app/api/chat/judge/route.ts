@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { providers, ProviderId, ChatMessage } from "@/lib/providers";
+import { resolveProvider, ProviderId, ChatMessage } from "@/lib/providers";
 import { extractJson } from "@/lib/extract-json";
 
 export interface PersonaTotals {
@@ -20,10 +20,10 @@ export interface Scoreboard {
 
 // POST /api/chat/judge
 // Runs a judging round (or final verdict) for a conversation with an assigned judge.
-// Body: { conversationId, apiKeys, final?: boolean }
+// Body: { conversationId, apiKeys, apiUrls?, final?: boolean }
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { conversationId, apiKeys = {}, final = false } = body;
+  const { conversationId, apiKeys = {}, apiUrls = {}, final = false } = body;
 
   if (!conversationId) {
     return NextResponse.json({ error: "Missing conversationId" }, { status: 400 });
@@ -93,7 +93,7 @@ Respond with ONLY a JSON object, no other text:
     { role: "user", content: userContent },
   ];
 
-  const provider = providers[judge.provider as ProviderId];
+  const provider = resolveProvider(judge.provider as ProviderId, apiUrls[judge.provider]);
   if (!provider) {
     return NextResponse.json({ error: `Unknown provider: ${judge.provider}` }, { status: 400 });
   }

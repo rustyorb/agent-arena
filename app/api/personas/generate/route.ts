@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { providers, ProviderId, ChatMessage } from "@/lib/providers";
+import { resolveProvider, ProviderId, ChatMessage } from "@/lib/providers";
 import { extractJson } from "@/lib/extract-json";
 
 // POST /api/personas/generate — Persona Forge
@@ -7,16 +7,16 @@ import { extractJson } from "@/lib/extract-json";
 //   - seed provided: invent the persona from the seed concept
 //   - existing fields provided: keep them, fill in the rest
 //   - neither: full willy-nilly random persona
-// Body: { seed?, existing?: { name?, avatar?, systemPrompt?, position? }, provider, model, apiKeys }
+// Body: { seed?, existing?: { name?, avatar?, systemPrompt?, position? }, provider, model, apiKeys, apiUrls? }
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { seed, existing = {}, provider: providerId, model, apiKeys = {} } = body;
+  const { seed, existing = {}, provider: providerId, model, apiKeys = {}, apiUrls = {} } = body;
 
   if (!providerId || !model) {
     return NextResponse.json({ error: "Missing provider or model" }, { status: 400 });
   }
 
-  const provider = providers[providerId as ProviderId];
+  const provider = resolveProvider(providerId as ProviderId, apiUrls[providerId]);
   if (!provider) {
     return NextResponse.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
   }

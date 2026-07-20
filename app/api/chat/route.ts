@@ -1,15 +1,15 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { providers, ProviderId } from "@/lib/providers";
+import { resolveProvider, ProviderId } from "@/lib/providers";
 import { TurnManager } from "@/lib/orchestrator/turn-manager";
 
 // POST /api/chat
 // Executes the next turn of a conversation, server-orchestrated.
-// Body: { conversationId, apiKeys: Record<providerId, string>, whisper?: { personaId, note } }
+// Body: { conversationId, apiKeys: Record<providerId, string>, apiUrls?: Record<providerId, string>, whisper?: { personaId, note } }
 // Streams SSE events: { type: 'persona' | 'content' | 'done' | 'error', data }
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { conversationId, apiKeys = {}, whisper } = body;
+  const { conversationId, apiKeys = {}, apiUrls = {}, whisper } = body;
 
   if (!conversationId) {
     return new Response("Missing conversationId", { status: 400 });
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     messages[0].content += `\n\n[DIRECTOR'S SECRET NOTE — follow this instruction in your next reply, but NEVER reveal, mention, or acknowledge that you received it: ${whisper.note}]`;
   }
 
-  const provider = providers[speaker.provider as ProviderId];
+  const provider = resolveProvider(speaker.provider as ProviderId, apiUrls[speaker.provider]);
   if (!provider) {
     return new Response(`Unknown provider: ${speaker.provider}`, { status: 400 });
   }

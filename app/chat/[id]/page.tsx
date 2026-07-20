@@ -209,6 +209,11 @@ export default function ChatPage() {
     return keysStr ? JSON.parse(keysStr) : {}
   }
 
+  const getApiUrls = () => {
+    const urlsStr = localStorage.getItem('agent-arena-urls')
+    return urlsStr ? JSON.parse(urlsStr) : {}
+  }
+
   // AI Judge: run a scoring round (or the final verdict)
   const runJudgeRound = useCallback(
     async (final = false) => {
@@ -218,7 +223,7 @@ export default function ChatPage() {
         const res = await fetch('/api/chat/judge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: conversation.id, apiKeys: getApiKeys(), final }),
+          body: JSON.stringify({ conversationId: conversation.id, apiKeys: getApiKeys(), apiUrls: getApiUrls(), final }),
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
@@ -250,6 +255,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           conversationId: conversation.id,
           apiKeys: getApiKeys(),
+          apiUrls: getApiUrls(),
           ...(whisper && { whisper }),
         }),
         signal: controller.signal,

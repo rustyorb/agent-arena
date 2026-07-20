@@ -152,6 +152,8 @@ export default function PersonaEditorPage() {
     try {
       const keysStr = localStorage.getItem('agent-arena-keys')
       const apiKeys = keysStr ? JSON.parse(keysStr) : {}
+      const urlsStr = localStorage.getItem('agent-arena-urls')
+      const apiUrls = urlsStr ? JSON.parse(urlsStr) : {}
 
       // Only pass fields the user actually filled in (default avatar 🤖 doesn't count)
       const existing = {
@@ -170,6 +172,7 @@ export default function PersonaEditorPage() {
           provider: form.provider,
           model: form.model,
           apiKeys,
+          apiUrls,
         }),
       })
 

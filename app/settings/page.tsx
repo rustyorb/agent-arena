@@ -15,18 +15,38 @@ interface ProviderConfig {
   requiresKey: boolean;
   status: ProviderStatus;
   key: string;
+  url: string;
+  defaultUrl: string;
   modelCount: number;
 }
 
+// Standard vendor defaults, editable per-browser (stored in localStorage `agent-arena-urls`)
+const DEFAULT_URLS: Record<string, string> = {
+  openrouter: "https://openrouter.ai/api/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  openai: "https://api.openai.com/v1",
+  xai: "https://api.x.ai/v1",
+  openclaw: "http://localhost:18789",
+  lmstudio: "http://localhost:1234/v1",
+  ollama: "http://localhost:11434",
+};
+
 const INITIAL_PROVIDERS: ProviderConfig[] = [
-  { id: "openrouter", name: "OpenRouter", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
-  { id: "anthropic", name: "Anthropic", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
-  { id: "openai", name: "OpenAI", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
-  { id: "xai", name: "X.AI (Grok)", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
-  { id: "openclaw", name: "OpenClaw", requiresKey: true, status: "unconfigured", key: "", modelCount: 0 },
-  { id: "lmstudio", name: "LM Studio", requiresKey: false, status: "unconfigured", key: "", modelCount: 0 },
-  { id: "ollama", name: "Ollama", requiresKey: false, status: "unconfigured", key: "", modelCount: 0 },
-];
+  { id: "openrouter", name: "OpenRouter", requiresKey: true },
+  { id: "anthropic", name: "Anthropic", requiresKey: true },
+  { id: "openai", name: "OpenAI", requiresKey: true },
+  { id: "xai", name: "X.AI (Grok)", requiresKey: true },
+  { id: "openclaw", name: "OpenClaw", requiresKey: true },
+  { id: "lmstudio", name: "LM Studio", requiresKey: false },
+  { id: "ollama", name: "Ollama", requiresKey: false },
+].map((p) => ({
+  ...p,
+  status: "unconfigured" as ProviderStatus,
+  key: "",
+  url: DEFAULT_URLS[p.id],
+  defaultUrl: DEFAULT_URLS[p.id],
+  modelCount: 0,
+}));
 
 export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderConfig[]>(INITIAL_PROVIDERS);
@@ -34,27 +54,32 @@ export default function SettingsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load saved keys from localStorage
+    // Load saved keys + URL overrides from localStorage
     const saved = localStorage.getItem("agent-arena-keys");
-    if (saved) {
-      const keys = JSON.parse(saved);
-      setProviders((prev) =>
-        prev.map((p) => ({
-          ...p,
-          key: keys[p.id] || "",
-          status: keys[p.id] ? "valid" : "unconfigured",
-        }))
-      );
-    }
-    
-    // Check local providers
-    checkLocalProviders();
+    const savedUrls = localStorage.getItem("agent-arena-urls");
+    const keys = saved ? JSON.parse(saved) : {};
+    const urls = savedUrls ? JSON.parse(savedUrls) : {};
+    setProviders((prev) =>
+      prev.map((p) => ({
+        ...p,
+        key: keys[p.id] || "",
+        url: urls[p.id] || p.defaultUrl,
+        status: keys[p.id] ? "valid" : "unconfigured",
+      }))
+    );
+
+    // Check local providers with their saved URLs
+    checkLocalProviders(urls);
   }, []);
 
-  const checkLocalProviders = async () => {
+  const checkLocalProviders = async (urls: Record<string, string>) => {
     for (const id of ["lmstudio", "ollama"]) {
       try {
-        const res = await fetch(`/api/validate/${id}`, { method: "POST" });
+        const res = await fetch(`/api/validate/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiUrl: urls[id] || DEFAULT_URLS[id] }),
+        });
         const data = await res.json();
         setProviders((prev) =>
           prev.map((p) =>
@@ -83,7 +108,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/validate/${providerId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: provider.key }),
+        body: JSON.stringify({ key: provider.key, apiUrl: provider.url }),
       });
       const data = await res.json();
 
@@ -96,11 +121,20 @@ export default function SettingsPage() {
       );
 
       if (data.valid) {
-        // Save to localStorage
+        // Save key + URL to localStorage so chat/judge/forge hit the same host we just validated
         const saved = JSON.parse(localStorage.getItem("agent-arena-keys") || "{}");
         saved[providerId] = provider.key;
         localStorage.setItem("agent-arena-keys", JSON.stringify(saved));
-        
+
+        const savedUrls = JSON.parse(localStorage.getItem("agent-arena-urls") || "{}");
+        savedUrls[providerId] = provider.url;
+        localStorage.setItem("agent-arena-urls", JSON.stringify(savedUrls));
+
+        // Cache the model list — persona editor and Instant Matchups dropdowns read this
+        if (Array.isArray(data.models)) {
+          localStorage.setItem(`models-${providerId}`, JSON.stringify(data.models));
+        }
+
         toast({ title: "Success", description: `${provider.name} connected! Found ${data.modelCount} models.` });
       } else {
         toast({ title: "Error", description: `Failed to connect to ${provider.name}`, variant: "destructive" });
@@ -117,6 +151,14 @@ export default function SettingsPage() {
     setProviders((prev) =>
       prev.map((p) =>
         p.id === providerId ? { ...p, key, status: "unconfigured" as ProviderStatus } : p
+      )
+    );
+  };
+
+  const updateUrl = (providerId: string, url: string) => {
+    setProviders((prev) =>
+      prev.map((p) =>
+        p.id === providerId ? { ...p, url, status: "unconfigured" as ProviderStatus } : p
       )
     );
   };
@@ -173,6 +215,26 @@ export default function SettingsPage() {
                   </Button>
                 </div>
               )}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">API URL</span>
+                  {provider.url !== provider.defaultUrl && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => updateUrl(provider.id, provider.defaultUrl)}
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </div>
+                <Input
+                  className="font-mono text-xs"
+                  placeholder={provider.defaultUrl}
+                  value={provider.url}
+                  onChange={(e) => updateUrl(provider.id, e.target.value)}
+                />
+              </div>
               <Button
                 onClick={() => testProvider(provider.id)}
                 disabled={provider.status === "testing" || (provider.requiresKey && !provider.key)}

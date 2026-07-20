@@ -52,7 +52,7 @@ Hybrid approach — API keys stored in browser `localStorage` (key: `agent-arena
 | `/api/personas` | GET, POST | List/create personas |
 | `/api/personas/[id]` | GET, PUT, DELETE | Single persona CRUD |
 | `/api/models` | GET | Fetch available models from all providers |
-| `/api/validate/[provider]` | POST | Test provider connection and count models |
+| `/api/validate/[provider]` | POST | Test provider connection. Body: `{key?, apiUrl?}` → `{valid, modelCount, models}` — the settings page caches `models` to localStorage `models-<provider>` |
 
 ### Pages (`app/`)
 
@@ -88,6 +88,7 @@ shadcn/ui (new-york style) with Radix primitives. Components live in `components
 - All pages under `app/chat/` and `app/settings/` are client components (`'use client'`)
 - Streaming uses raw `ReadableStream` / `TextDecoder` chunked transfer with `AbortController` for cancellation
 - The chat page sends API keys from localStorage (key: `agent-arena-keys`) to the server on each request — keys are not stored server-side
+- Per-provider base URL overrides live in localStorage `agent-arena-urls` (edited on `/settings`, persisted on successful test) and travel as `apiUrls` in chat/judge/forge/validate request bodies; `resolveProvider(id, baseUrl?)` in `lib/providers/index.ts` applies them via a shallow copy since every provider method reads `this.baseUrl`
 - Prisma client singleton pattern in `lib/db.ts` (cached on `globalThis` in dev to survive HMR)
 - Turn orchestration is fully server-side: `/api/chat` loads conversation + personas, runs `TurnManager`, and streams SSE — the client only supplies `conversationId` + `apiKeys` (+ optional `whisper`)
 - Whisper Mode: the client arms a `{personaId, note}` pair; the server injects it into the system prompt only when that persona is the next speaker, and the `persona` SSE event's `whispered: true` tells the client to disarm
