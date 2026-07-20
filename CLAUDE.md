@@ -94,6 +94,7 @@ shadcn/ui (new-york style) with Radix primitives. Components live in `components
 - Turn orchestration is fully server-side: `/api/chat` loads conversation + personas, runs `TurnManager`, and streams SSE — the client only supplies `conversationId` + `apiKeys` (+ optional `whisper`)
 - Whisper Mode: the client arms a `{personaId, note}` pair; the server injects it into the system prompt only when that persona is the next speaker, and the `persona` SSE event's `whispered: true` tells the client to disarm
 - Judge auto-rounds are client-triggered: after each `done` event, if unjudged debate messages ≥ combatant count, the chat page calls `/api/chat/judge`
+- Orchestration prompts + context knobs (history depth, message cap, opening/turn/style prompts) live in `lib/conductor.ts`; users edit them in the Prompt Lab on `/settings` (localStorage `agent-arena-conductor`), the chat page sends them as `conductor` with each turn, and the server merges/clamps via `resolveConductor()`. Aborted turns (Pause/disconnect mid-stream) are not persisted
 - Model dropdowns (persona editor, Instant Matchups) read cached lists from localStorage `models-<provider>` populated by the settings page
 - Conversation GET endpoint includes messages (`include: { messages: true }`)
 - PATCH routes whitelist allowed fields to prevent mass assignment
