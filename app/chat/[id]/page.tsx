@@ -1,22 +1,37 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
-import { Play, Pause, Square, ArrowDown, Download, Send, BarChart3 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Play, Pause, Square, ArrowDown, Download, Send, BarChart3,
+  Volume2, VolumeX, Film, Trophy, VenetianMask, X,
+} from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { ChatStats } from '@/components/chat-stats'
+import { Scoreboard, ScoreboardData } from '@/components/scoreboard'
+import { speak, stopSpeaking, initVoices, isSpeechSupported } from '@/lib/voice'
 
 interface Message {
   id: string
@@ -24,14 +39,22 @@ interface Message {
   personaName: string
   model: string
   content: string
+  isJudge: boolean
   createdAt: string
 }
 
-interface Persona {
+interface StreamPersona {
   id: string
   name: string
   avatar: string | null
   model: string
+  whispered?: boolean
+}
+
+interface PersonaInfo {
+  id: string
+  name: string
+  avatar: string | null
 }
 
 interface Conversation {
@@ -39,13 +62,18 @@ interface Conversation {
   title: string
   topic: string
   mode: string
+  personas: string
+  judgeId: string | null
+  scores: string | null
   messages: Message[]
 }
+
+const MESSAGE_CAP = 20
 
 export default function ChatPage() {
   const params = useParams()
   const [conversation, setConversation] = useState<Conversation | null>(null)
-  const [currentMessage, setCurrentMessage] = useState<{ persona: Persona; content: string } | null>(null)
+  const [currentMessage, setCurrentMessage] = useState<{ persona: StreamPersona; content: string } | null>(null)
   const [status, setStatus] = useState<'idle' | 'running' | 'paused'>('idle')
   const [autoScroll, setAutoScroll] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -62,16 +90,65 @@ export default function ChatPage() {
   // Stats panel state
   const [showStats, setShowStats] = useState(false)
 
+  // Whisper Mode state
+  const [whisper, setWhisper] = useState<{ personaId: string; note: string } | null>(null)
+  const [whisperOpen, setWhisperOpen] = useState(false)
+  const [whisperTarget, setWhisperTarget] = useState('')
+  const [whisperNote, setWhisperNote] = useState('')
+
+  // Voice Mode state
+  const [voiceOn, setVoiceOn] = useState(false)
+
+  // Judge state
+  const [judging, setJudging] = useState(false)
+
+  // All personas, for avatars + whisper targeting
+  const [personaMap, setPersonaMap] = useState<Record<string, PersonaInfo>>({})
+
   // AbortController for cancelling fetch
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const { toast } = useToast()
 
+  const combatantIds: string[] = conversation ? JSON.parse(conversation.personas) : []
+  const scoreboard: ScoreboardData | null = conversation?.scores
+    ? JSON.parse(conversation.scores)
+    : conversation?.judgeId
+      ? { rounds: 0, lastJudgedCount: 0, totals: {} }
+      : null
+
+  const debateCount = (msgs: Message[]) =>
+    msgs.filter((m) => !m.isJudge && m.personaId !== 'human').length
+
   useEffect(() => {
     if (params.id) {
       fetchConversation()
     }
+    fetch('/api/personas')
+      .then((res) => res.json())
+      .then((data: PersonaInfo[]) => {
+        const map: Record<string, PersonaInfo> = {}
+        for (const p of data) map[p.id] = p
+        setPersonaMap(map)
+      })
+      .catch(() => {})
   }, [params.id])
+
+  // Voice Mode: warm the browser voice cache, restore preference
+  useEffect(() => {
+    initVoices()
+    setVoiceOn(localStorage.getItem('agent-arena-voice') === 'on')
+    return () => stopSpeaking()
+  }, [])
+
+  const toggleVoice = () => {
+    setVoiceOn((prev) => {
+      const next = !prev
+      localStorage.setItem('agent-arena-voice', next ? 'on' : 'off')
+      if (!next) stopSpeaking()
+      return next
+    })
+  }
 
   useEffect(() => {
     if (autoScroll) {
@@ -84,9 +161,10 @@ export default function ChatPage() {
     if (
       autoContinue &&
       status === 'idle' &&
+      !judging &&
       conversation &&
       conversation.messages.length > 0 &&
-      conversation.messages.length < 20
+      debateCount(conversation.messages) < MESSAGE_CAP
     ) {
       autoContinueTimerRef.current = setTimeout(() => {
         handleStart()
@@ -99,7 +177,7 @@ export default function ChatPage() {
         autoContinueTimerRef.current = null
       }
     }
-  }, [status, autoContinue, autoContinueDelay, conversation?.messages.length])
+  }, [status, autoContinue, autoContinueDelay, judging, conversation?.messages.length])
 
   // Clean up auto-continue timer on unmount
   useEffect(() => {
@@ -110,19 +188,52 @@ export default function ChatPage() {
     }
   }, [])
 
-  const fetchConversation = async () => {
+  const fetchConversation = async (): Promise<Conversation | null> => {
     try {
       const res = await fetch(`/api/conversations/${params.id}`)
       const data = await res.json()
       setConversation(data)
+      return data
     } catch (err) {
       console.error('Failed to fetch conversation:', err)
+      return null
     }
   }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const getApiKeys = () => {
+    const keysStr = localStorage.getItem('agent-arena-keys')
+    return keysStr ? JSON.parse(keysStr) : {}
+  }
+
+  // AI Judge: run a scoring round (or the final verdict)
+  const runJudgeRound = useCallback(
+    async (final = false) => {
+      if (!conversation?.judgeId || judging) return
+      setJudging(true)
+      try {
+        const res = await fetch('/api/chat/judge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversationId: conversation.id, apiKeys: getApiKeys(), final }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Judge round failed')
+        }
+        await fetchConversation()
+      } catch (err) {
+        console.error('Judge error:', err)
+        toast({ title: 'Judge Error', description: (err as Error).message, variant: 'destructive' })
+      } finally {
+        setJudging(false)
+      }
+    },
+    [conversation?.id, conversation?.judgeId, judging]
+  )
 
   const handleStart = async () => {
     if (!conversation) return
@@ -133,16 +244,13 @@ export default function ChatPage() {
     setCurrentMessage(null)
 
     try {
-      // Get API keys from localStorage
-      const keysStr = localStorage.getItem('api-keys')
-      const apiKeys = keysStr ? JSON.parse(keysStr) : {}
-
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: conversation.id,
-          apiKeys,
+          apiKeys: getApiKeys(),
+          ...(whisper && { whisper }),
         }),
         signal: controller.signal,
       })
@@ -154,7 +262,7 @@ export default function ChatPage() {
 
       const decoder = new TextDecoder()
       let buffer = ''
-      let currentPersona: Persona | null = null
+      let currentPersona: StreamPersona | null = null
 
       try {
         while (true) {
@@ -173,13 +281,32 @@ export default function ChatPage() {
                 if (data.type === 'persona') {
                   currentPersona = data.data
                   setCurrentMessage({ persona: data.data, content: '' })
+                  // Whisper consumed — disarm it
+                  if (data.data.whispered) {
+                    setWhisper(null)
+                  }
                 } else if (data.type === 'content' && currentPersona) {
                   setCurrentMessage(prev =>
                     prev ? { ...prev, content: prev.content + data.data } : null
                   )
                 } else if (data.type === 'done') {
                   setCurrentMessage(null)
-                  await fetchConversation()
+                  if (voiceOn && data.data?.content) {
+                    speak(data.data.personaId, data.data.content)
+                  }
+                  const updated = await fetchConversation()
+                  // Auto-judge after every full round (each combatant spoke once more)
+                  if (
+                    updated?.judgeId &&
+                    combatantIds.length > 0
+                  ) {
+                    const sb: ScoreboardData = updated.scores
+                      ? JSON.parse(updated.scores)
+                      : { rounds: 0, lastJudgedCount: 0, totals: {} }
+                    if (debateCount(updated.messages) - sb.lastJudgedCount >= combatantIds.length) {
+                      runJudgeRound(false)
+                    }
+                  }
                 } else if (data.type === 'error') {
                   console.error('Stream error:', data.data)
                   toast({ title: 'Stream Error', description: String(data.data), variant: 'destructive' })
@@ -206,6 +333,7 @@ export default function ChatPage() {
   const handlePause = () => {
     setStatus('paused')
     setAutoContinue(false)
+    stopSpeaking()
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
@@ -220,6 +348,7 @@ export default function ChatPage() {
     setStatus('idle')
     setCurrentMessage(null)
     setAutoContinue(false)
+    stopSpeaking()
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
@@ -255,6 +384,13 @@ export default function ChatPage() {
     }
   }
 
+  const handleArmWhisper = () => {
+    if (!whisperTarget || !whisperNote.trim()) return
+    setWhisper({ personaId: whisperTarget, note: whisperNote.trim() })
+    setWhisperOpen(false)
+    setWhisperNote('')
+  }
+
   const handleExport = async (format: 'markdown' | 'json') => {
     try {
       const res = await fetch(`/api/conversations/${params.id}/export?format=${format}`)
@@ -284,6 +420,11 @@ export default function ChatPage() {
   }
 
   const allMessages = conversation.messages
+  const avatarFor = (msg: Message) => {
+    if (msg.personaId === 'human') return '👤'
+    if (msg.isJudge) return personaMap[msg.personaId]?.avatar || '⚖️'
+    return personaMap[msg.personaId]?.avatar || '🤖'
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
@@ -298,6 +439,15 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* Live scoreboard (AI Judge) */}
+      {scoreboard && (
+        <div className="px-4 pt-3">
+          <div className="max-w-6xl mx-auto">
+            <Scoreboard scoreboard={scoreboard} judging={judging} />
+          </div>
+        </div>
+      )}
+
       {/* Messages area with optional stats panel */}
       <div className="flex flex-1 overflow-hidden">
         <div
@@ -306,13 +456,22 @@ export default function ChatPage() {
         >
           <div className="max-w-4xl mx-auto space-y-4">
             {allMessages.map((msg) => (
-              <Card key={msg.id} className="hover:shadow-md transition-shadow">
+              <Card
+                key={msg.id}
+                className={
+                  msg.isJudge
+                    ? 'border-amber-500/60 bg-amber-500/5'
+                    : 'hover:shadow-md transition-shadow'
+                }
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl">{msg.personaId === 'human' ? '\uD83D\uDC64' : '\uD83E\uDD16'}</span>
+                      <span className="text-2xl">{avatarFor(msg)}</span>
                       <div>
-                        <CardTitle className="text-base">{msg.personaName}</CardTitle>
+                        <CardTitle className="text-base">
+                          {msg.isJudge ? `⚖️ ${msg.personaName}` : msg.personaName}
+                        </CardTitle>
                         <Badge variant="secondary" className="text-xs mt-1">
                           {msg.model}
                         </Badge>
@@ -324,7 +483,7 @@ export default function ChatPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
                     {msg.content}
                   </div>
                 </CardContent>
@@ -336,7 +495,7 @@ export default function ChatPage() {
               <Card className="border-primary">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl">{currentMessage.persona.avatar || '\uD83E\uDD16'}</span>
+                    <span className="text-2xl">{currentMessage.persona.avatar || '🤖'}</span>
                     <div>
                       <CardTitle className="text-base">{currentMessage.persona.name}</CardTitle>
                       <Badge variant="secondary" className="text-xs mt-1">
@@ -346,7 +505,7 @@ export default function ChatPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
                     {currentMessage.content}
                     <span className="inline-block w-1 h-4 bg-primary ml-1 animate-pulse" />
                   </div>
@@ -395,11 +554,11 @@ export default function ChatPage() {
 
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     onClick={handleStart}
-                    disabled={status === 'running'}
+                    disabled={status === 'running' || judging}
                     size="sm"
                   >
                     <Play className="mr-2 h-4 w-4" />
@@ -425,6 +584,47 @@ export default function ChatPage() {
                     <Square className="mr-2 h-4 w-4" />
                     Stop
                   </Button>
+
+                  {/* Whisper Mode */}
+                  {whisper ? (
+                    <Badge
+                      variant="outline"
+                      className="border-violet-500/60 text-violet-500 cursor-pointer gap-1"
+                      onClick={() => setWhisper(null)}
+                      title="Click to disarm"
+                    >
+                      <VenetianMask className="h-3 w-3" />
+                      Whisper armed: {personaMap[whisper.personaId]?.name || 'persona'}
+                      <X className="h-3 w-3" />
+                    </Badge>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        setWhisperTarget(combatantIds[0] || '')
+                        setWhisperOpen(true)
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-violet-500 border-violet-500/40"
+                    >
+                      <VenetianMask className="mr-2 h-4 w-4" />
+                      Whisper
+                    </Button>
+                  )}
+
+                  {/* Final Verdict (AI Judge) */}
+                  {conversation.judgeId && !scoreboard?.winner && (
+                    <Button
+                      onClick={() => runJudgeRound(true)}
+                      disabled={judging || status === 'running' || debateCount(allMessages) === 0}
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-500 border-amber-500/40"
+                    >
+                      <Trophy className="mr-2 h-4 w-4" />
+                      {judging ? 'Deliberating...' : 'Final Verdict'}
+                    </Button>
+                  )}
 
                   <div className="flex items-center gap-2 ml-4 border-l pl-4">
                     <Switch
@@ -455,6 +655,28 @@ export default function ChatPage() {
                   <div className="text-sm text-muted-foreground">
                     {allMessages.length} messages
                   </div>
+
+                  {/* Voice Mode */}
+                  {isSpeechSupported() && (
+                    <Button
+                      onClick={toggleVoice}
+                      variant={voiceOn ? 'default' : 'outline'}
+                      size="sm"
+                      title="Voice Mode: personas speak their messages aloud"
+                    >
+                      {voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                    </Button>
+                  )}
+
+                  {/* Cinematic Replay */}
+                  {allMessages.length > 0 && (
+                    <Link href={`/chat/${conversation.id}/replay`}>
+                      <Button variant="outline" size="sm">
+                        <Film className="mr-2 h-4 w-4" />
+                        Replay
+                      </Button>
+                    </Link>
+                  )}
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -495,6 +717,64 @@ export default function ChatPage() {
           </Card>
         </div>
       </div>
+
+      {/* Whisper Mode dialog */}
+      <Dialog open={whisperOpen} onOpenChange={setWhisperOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <VenetianMask className="h-5 w-5 text-violet-500" />
+              Whisper a Director&apos;s Note
+            </DialogTitle>
+            <DialogDescription>
+              Secretly steer one persona&apos;s next turn. The note is injected into their instructions —
+              they will follow it but never reveal it, and no one else sees it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              {combatantIds.map((id) => {
+                const p = personaMap[id]
+                if (!p) return null
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setWhisperTarget(id)}
+                    className={`p-2 rounded-lg border text-left transition-colors flex items-center gap-2 ${
+                      whisperTarget === id
+                        ? 'border-violet-500 bg-violet-500/10'
+                        : 'border-border hover:border-violet-500/50'
+                    }`}
+                  >
+                    <span className="text-xl">{p.avatar || '🤖'}</span>
+                    <span className="text-sm font-medium">{p.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <Textarea
+              value={whisperNote}
+              onChange={(e) => setWhisperNote(e.target.value)}
+              placeholder='e.g., "Start doubting your own position" or "Get theatrical and challenge them to a duel"'
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWhisperOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleArmWhisper}
+              disabled={!whisperTarget || !whisperNote.trim()}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              <VenetianMask className="mr-2 h-4 w-4" />
+              Arm Whisper
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

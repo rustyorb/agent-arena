@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 
 interface PersonaForm {
@@ -73,6 +73,10 @@ export default function PersonaEditorPage() {
   const [availableModels, setAvailableModels] = useState<Array<{ provider: string; models: any[] }>>([])
   const [saving, setSaving] = useState(false)
 
+  // Persona Forge state
+  const [seed, setSeed] = useState('')
+  const [forging, setForging] = useState(false)
+
   useEffect(() => {
     loadModels()
     if (!isNew) {
@@ -82,7 +86,7 @@ export default function PersonaEditorPage() {
 
   const loadModels = () => {
     const allModels = []
-    const providers = ['openrouter', 'anthropic', 'openai', 'xai', 'lmstudio', 'ollama']
+    const providers = ['openrouter', 'anthropic', 'openai', 'xai', 'openclaw', 'lmstudio', 'ollama']
     
     for (const provider of providers) {
       const stored = localStorage.getItem(`models-${provider}`)
@@ -138,6 +142,59 @@ export default function PersonaEditorPage() {
     }
   }
 
+  const handleForge = async () => {
+    if (!form.provider || !form.model) {
+      alert('Pick a provider and model below first — the Forge uses it to generate.')
+      return
+    }
+    setForging(true)
+
+    try {
+      const keysStr = localStorage.getItem('agent-arena-keys')
+      const apiKeys = keysStr ? JSON.parse(keysStr) : {}
+
+      // Only pass fields the user actually filled in (default avatar 🤖 doesn't count)
+      const existing = {
+        name: form.name,
+        avatar: form.avatar === '🤖' ? '' : form.avatar,
+        systemPrompt: form.systemPrompt,
+        position: form.position,
+      }
+
+      const response = await fetch('/api/personas/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seed,
+          existing,
+          provider: form.provider,
+          model: form.model,
+          apiKeys,
+        }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || 'Generation failed')
+      }
+
+      const generated = await response.json()
+      setForm(prev => ({
+        ...prev,
+        name: generated.name,
+        avatar: generated.avatar,
+        systemPrompt: generated.systemPrompt,
+        position: generated.position,
+        temperature: generated.temperature,
+      }))
+    } catch (error) {
+      console.error('Forge failed:', error)
+      alert(`Forge failed: ${(error as Error).message}`)
+    } finally {
+      setForging(false)
+    }
+  }
+
   const applyTemplate = (template: typeof PRESET_TEMPLATES[0]) => {
     setForm(prev => ({
       ...prev,
@@ -168,6 +225,46 @@ export default function PersonaEditorPage() {
             </p>
           </div>
         </div>
+
+        <Card className="border-violet-500/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500" />
+              Persona Forge
+            </CardTitle>
+            <CardDescription>
+              Describe a seed concept and let AI forge the persona. Pre-filled fields below are kept.
+              Leave everything empty for full willy-nilly mode.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                value={seed}
+                onChange={(e) => setSeed(e.target.value)}
+                placeholder='e.g., "grumpy pirate economist" or "valley girl quantum physicist"... or leave empty'
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleForge()
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleForge}
+                disabled={forging}
+                className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {forging ? 'Forging...' : seed.trim() ? 'Forge' : 'Willy-Nilly'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Uses the provider/model selected in the form below.
+            </p>
+          </CardContent>
+        </Card>
 
         {isNew && (
           <Card>
