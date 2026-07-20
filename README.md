@@ -133,6 +133,7 @@ Six curated arenas, one click each. Personas *and* conversation are created for 
 
 | Matchup | Mode | Judged? | The Pitch |
 |:---|:---:|:---:|---:|
+| 🚪 The Infinite Backrooms | free | — | two explorers, temp 1.0, no rules — an homage to the ancestor of the genre |
 | 🤖 AGI: Hype or History? | debate | ⚖️ | optimist vs. doomer |
 | 🏛️ Socrates in Silicon Valley | interview | — | philosophy vs. pitch deck |
 | 🍍 Pineapple on Pizza: The Reckoning | debate | ⚖️ | nonna vs. chaos chef |
@@ -244,7 +245,7 @@ sequenceDiagram
     end
 ```
 
-The **TurnManager** picks the next speaker per mode, builds a prompt from the persona's system instructions plus the last 10 messages, and hands off to the provider. Judge verdicts are stored as `isJudge` messages — excluded from turn-taking history and the 20-message cap[^cap], so commentary never pollutes the debate.
+The **TurnManager** picks the next speaker per mode and builds each turn in the **merged-run format**: the speaker's own past lines return as raw `assistant` messages (a genuine first-person chat, no screenplay drift), while each stretch of other voices collapses into a single labeled `user` block — perfect role alternation at any persona count, and with exactly two personas it reduces to the classic Infinite-Backrooms format. Anti-repetition pressure comes from `frequency`/`presence` penalties (tunable in the Prompt Lab) plus turn prompts that demand the conversation go somewhere *new*. Judge verdicts are stored as `isJudge` messages — excluded from turn-taking history and the message cap[^cap], so commentary never pollutes the conversation.
 
 <details>
 <summary><strong>Conversation Modes Explained</strong></summary>

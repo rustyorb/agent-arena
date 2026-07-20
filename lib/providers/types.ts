@@ -15,6 +15,10 @@ export interface ChatConfig {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  // Anti-repetition sampling penalties (0-2). Applied by OpenAI-compatible
+  // providers and Ollama; ignored by providers without support (Anthropic).
+  frequencyPenalty?: number;
+  presencePenalty?: number;
 }
 
 export interface AIProvider {

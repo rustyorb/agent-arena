@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { resolveProvider } from "@/lib/providers";
 import { TurnManager } from "@/lib/orchestrator/turn-manager";
 import { resolveConductor } from "@/lib/conductor";
+import { stripLeadingLabels } from "@/lib/sanitize";
 
 // POST /api/chat
 // Executes the next turn of a conversation, server-orchestrated.
@@ -100,6 +101,8 @@ export async function POST(request: NextRequest) {
             messages,
             temperature: speaker.temperature,
             maxTokens: speaker.maxTokens,
+            frequencyPenalty: conductor.frequencyPenalty,
+            presencePenalty: conductor.presencePenalty,
           },
           apiKey
         );
@@ -108,6 +111,34 @@ export async function POST(request: NextRequest) {
           fullContent += chunk;
           controller.enqueue(sse("content", chunk));
         }
+
+        // Empty-turn retry: thinking models can burn the whole token budget on
+        // reasoning and stream no content. Retry once with a lifted cap — an
+        // empty message must never be persisted (it poisons the next turn).
+        if (!fullContent.trim()) {
+          const retryGenerator = provider.chat(
+            {
+              model: speaker.model,
+              messages,
+              temperature: speaker.temperature,
+              maxTokens: Math.max(4096, (speaker.maxTokens ?? 1024) * 2),
+              frequencyPenalty: conductor.frequencyPenalty,
+              presencePenalty: conductor.presencePenalty,
+            },
+            apiKey
+          );
+          for await (const chunk of retryGenerator) {
+            fullContent += chunk;
+            controller.enqueue(sse("content", chunk));
+          }
+        }
+
+        if (!fullContent.trim()) {
+          throw new Error(`${speaker.name} produced an empty turn (twice) — not saved`);
+        }
+
+        // Kill the label feedback loop before it enters the transcript
+        fullContent = stripLeadingLabels(fullContent, speaker.name);
 
         await prisma.message.create({
           data: {

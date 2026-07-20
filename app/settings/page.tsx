@@ -466,6 +466,41 @@ export default function SettingsPage() {
             </p>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label>Frequency penalty (0–2)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={conductor.frequencyPenalty}
+                onChange={(e) =>
+                  setConductor((c) => ({ ...c, frequencyPenalty: parseFloat(e.target.value) }))
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Discourages repeating the same phrasing. Local AI-vs-AI chats loop without a little penalty pressure.
+              </p>
+            </div>
+            <div>
+              <Label>Presence penalty (0–2)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={conductor.presencePenalty}
+                onChange={(e) =>
+                  setConductor((c) => ({ ...c, presencePenalty: parseFloat(e.target.value) }))
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Encourages new topics. Ignored by providers without support (Anthropic, OpenClaw).
+              </p>
+            </div>
+          </div>
+
           <div>
             <Label>Style rules — appended to every persona&apos;s system prompt</Label>
             <Textarea

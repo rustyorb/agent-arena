@@ -33,6 +33,7 @@ import { ChatStats } from '@/components/chat-stats'
 import { Scoreboard, ScoreboardData } from '@/components/scoreboard'
 import { speak, stopSpeaking, initVoices, isSpeechSupported } from '@/lib/voice'
 import { resolveConductor, ConductorSettings } from '@/lib/conductor'
+import { looksLikeAsciiArt } from '@/lib/ascii-art'
 
 interface Message {
   id: string
@@ -499,7 +500,13 @@ export default function ChatPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
+                  <div
+                    className={
+                      looksLikeAsciiArt(msg.content)
+                        ? 'font-mono text-xs leading-tight whitespace-pre overflow-x-auto'
+                        : 'prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap'
+                    }
+                  >
                     {msg.content}
                   </div>
                 </CardContent>

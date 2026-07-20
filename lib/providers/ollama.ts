@@ -48,6 +48,8 @@ export const ollama: AIProvider = {
         options: {
           temperature: config.temperature ?? 0.7,
           num_predict: config.maxTokens ?? 1024,
+          ...(config.frequencyPenalty ? { frequency_penalty: config.frequencyPenalty, repeat_penalty: 1.15 } : {}),
+          ...(config.presencePenalty ? { presence_penalty: config.presencePenalty } : {}),
         },
         stream: true,
       }),

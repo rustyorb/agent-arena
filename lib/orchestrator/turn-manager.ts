@@ -1,5 +1,5 @@
 import { ChatMessage } from '../providers/types'
-import { ConductorSettings, DEFAULT_CONDUCTOR } from '../conductor'
+import { ConductorSettings, DEFAULT_CONDUCTOR, MODE_SEASONING } from '../conductor'
 
 export interface Message {
   id: string
@@ -60,34 +60,66 @@ export class TurnManager {
     }
   }
 
+  // Unified "merged-run" prompt format. The speaker's own past turns become
+  // raw `assistant` messages (first-person, no name prefix — no screenplay
+  // drift). Every consecutive run of OTHER voices collapses into ONE `user`
+  // message containing that stretch of labeled transcript. This keeps perfect
+  // user/assistant alternation for any number of personas — with exactly two
+  // it degenerates into the classic backrooms format — so every provider and
+  // local chat template renders it cleanly.
   buildPrompt(persona: Persona): ChatMessage[] {
     const messages: ChatMessage[] = []
 
-    // Add system message with persona's prompt
     messages.push({
       role: 'system',
       content: this.buildSystemPrompt(persona)
     })
 
-    // Add conversation history (recent window, size set by the Conductor)
-    const recentHistory = this.history.slice(-this.conductor.historyDepth)
-    for (const msg of recentHistory) {
-      messages.push({
-        role: msg.personaId === persona.id ? 'assistant' : 'user',
-        content: `${msg.personaName}: ${msg.content}`
-      })
-    }
-
-    // Add prompt for next turn
     if (this.history.length === 0) {
       messages.push({
         role: 'user',
         content: this.conductor.openingPrompt.replace('{topic}', this.topic)
       })
+      return messages
+    }
+
+    // Collapse history into alternating own/others blocks
+    const recentHistory = this.history.slice(-this.conductor.historyDepth)
+    const blocks: Array<{ own: boolean; content: string }> = []
+    for (const msg of recentHistory) {
+      const own = msg.personaId === persona.id
+      const text = own ? msg.content : `${msg.personaName}: ${msg.content}`
+      const last = blocks[blocks.length - 1]
+      if (last && !last.own && !own) {
+        last.content += `\n\n${text}`
+      } else {
+        blocks.push({ own, content: text })
+      }
+    }
+
+    // Topic reminder seeds the context. Merged into the first user block when
+    // possible so the sequence always starts user-first with no doubled roles.
+    const topicLine = `[The conversation topic: "${this.topic}"]`
+    if (!blocks[0].own) {
+      blocks[0].content = `${topicLine}\n\n${blocks[0].content}`
     } else {
+      blocks.unshift({ own: false, content: topicLine })
+    }
+
+    // Turn instruction rides at the end, inside the final user message
+    const seasoning = MODE_SEASONING[this.mode]
+    const instruction = `[${this.conductor.turnPrompt}${seasoning ? ` ${seasoning}` : ''}]`
+    const last = blocks[blocks.length - 1]
+    if (!last.own) {
+      last.content += `\n\n${instruction}`
+    } else {
+      blocks.push({ own: false, content: instruction })
+    }
+
+    for (const block of blocks) {
       messages.push({
-        role: 'user',
-        content: this.conductor.turnPrompt
+        role: block.own ? 'assistant' : 'user',
+        content: block.content
       })
     }
 

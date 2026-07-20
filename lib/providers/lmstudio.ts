@@ -39,6 +39,8 @@ export const lmstudio: AIProvider = {
         messages: config.messages,
         temperature: config.temperature ?? 0.7,
         max_tokens: config.maxTokens ?? 1024,
+        ...(config.frequencyPenalty ? { frequency_penalty: config.frequencyPenalty } : {}),
+        ...(config.presencePenalty ? { presence_penalty: config.presencePenalty } : {}),
         stream: true,
       }),
     });

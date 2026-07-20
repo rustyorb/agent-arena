@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Play, Pause, RotateCcw, ArrowLeft, Film } from 'lucide-react'
+import { looksLikeAsciiArt } from '@/lib/ascii-art'
 
 interface Message {
   id: string
@@ -176,7 +177,13 @@ export default function ReplayPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
+                <div
+                  className={
+                    looksLikeAsciiArt(msg.content)
+                      ? 'font-mono text-xs leading-tight whitespace-pre overflow-x-auto'
+                      : 'prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap'
+                  }
+                >
                   {msg.content}
                 </div>
               </CardContent>
