@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { resolveProvider, ProviderId, ChatMessage } from "@/lib/providers";
+import { resolveProvider, ChatMessage } from "@/lib/providers";
 import { extractJson } from "@/lib/extract-json";
 
 export interface PersonaTotals {
@@ -93,7 +93,7 @@ Respond with ONLY a JSON object, no other text:
     { role: "user", content: userContent },
   ];
 
-  const provider = resolveProvider(judge.provider as ProviderId, apiUrls[judge.provider]);
+  const provider = resolveProvider(judge.provider, apiUrls[judge.provider]);
   if (!provider) {
     return NextResponse.json({ error: `Unknown provider: ${judge.provider}` }, { status: 400 });
   }

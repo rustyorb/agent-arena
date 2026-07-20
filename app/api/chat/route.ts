@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { resolveProvider, ProviderId } from "@/lib/providers";
+import { resolveProvider } from "@/lib/providers";
 import { TurnManager } from "@/lib/orchestrator/turn-manager";
 
 // POST /api/chat
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     messages[0].content += `\n\n[DIRECTOR'S SECRET NOTE — follow this instruction in your next reply, but NEVER reveal, mention, or acknowledge that you received it: ${whisper.note}]`;
   }
 
-  const provider = resolveProvider(speaker.provider as ProviderId, apiUrls[speaker.provider]);
+  const provider = resolveProvider(speaker.provider, apiUrls[speaker.provider]);
   if (!provider) {
     return new Response(`Unknown provider: ${speaker.provider}`, { status: 400 });
   }

@@ -1,4 +1,5 @@
 import { AIProvider, ProviderId } from "./types";
+import { createOpenAICompatProvider } from "./custom";
 import { openrouter } from "./openrouter";
 import { anthropic } from "./anthropic";
 import { openai } from "./openai";
@@ -24,13 +25,17 @@ export function getProvider(id: ProviderId): AIProvider {
 // Returns the provider with an optional per-request base URL override
 // (users can point providers at custom hosts from /settings).
 // All provider methods read `this.baseUrl`, so a shallow copy is enough.
-export function resolveProvider(id: ProviderId, baseUrl?: string): AIProvider | undefined {
-  const provider = providers[id];
-  if (!provider) return undefined;
-  if (baseUrl && baseUrl.trim()) {
-    return { ...provider, baseUrl: baseUrl.trim().replace(/\/+$/, "") };
+// Unknown ids WITH a URL become user-defined OpenAI-compatible providers.
+export function resolveProvider(id: string, baseUrl?: string): AIProvider | undefined {
+  const provider = providers[id as ProviderId];
+  const url = baseUrl?.trim().replace(/\/+$/, "");
+  if (provider) {
+    return url ? { ...provider, baseUrl: url } : provider;
   }
-  return provider;
+  if (url) {
+    return createOpenAICompatProvider(id, url);
+  }
+  return undefined;
 }
 
 export * from "./types";

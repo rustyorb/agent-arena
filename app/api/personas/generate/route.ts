@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveProvider, ProviderId, ChatMessage } from "@/lib/providers";
+import { resolveProvider, ChatMessage } from "@/lib/providers";
 import { extractJson } from "@/lib/extract-json";
 
 // POST /api/personas/generate — Persona Forge
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing provider or model" }, { status: 400 });
   }
 
-  const provider = resolveProvider(providerId as ProviderId, apiUrls[providerId]);
+  const provider = resolveProvider(providerId, apiUrls[providerId]);
   if (!provider) {
     return NextResponse.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
   }

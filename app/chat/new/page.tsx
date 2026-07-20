@@ -70,7 +70,15 @@ export default function NewConversationPage() {
   // Model lists cached by the settings page per provider
   const loadModels = () => {
     const all: Array<{ provider: string; models: any[] }> = [];
-    for (const provider of PROVIDERS) {
+    const providerIds = [...PROVIDERS];
+
+    // Include user-defined custom providers from /settings
+    try {
+      const customDefs = JSON.parse(localStorage.getItem("agent-arena-custom-providers") || "[]");
+      providerIds.push(...customDefs.map((c: { id: string }) => c.id));
+    } catch {}
+
+    for (const provider of providerIds) {
       const stored = localStorage.getItem(`models-${provider}`);
       if (stored) {
         try {

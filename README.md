@@ -375,8 +375,9 @@ agent-arena/
 | **OpenAI** | ☁️ | `api.openai.com/v1` | `Bearer` | GPT family |
 | **X.AI** | ☁️ | `api.x.ai/v1` | `Bearer` | Grok family |
 | **OpenClaw** | 🐾 | `localhost:18789` | `Bearer` | `openclaw:main` — speaks the **Responses API** |
-| **LM Studio** | 🏠 | port `6969` | none | whatever you loaded |
+| **LM Studio** | 🏠 | port `1234` | none | whatever you loaded |
 | **Ollama** | 🏠 | port `11434` | none | `ollama pull` and go |
+| **Your Weird Thing™** | 🛠️ | any OpenAI-compatible URL | optional | vLLM, LocalAI, text-gen-webui, llama.cpp, LiteLLM… added via **＋ Add Custom Provider** on `/settings` |
 
 All seven hide behind one interface — every provider is an `AsyncGenerator<string>` in a trench coat:
 
@@ -649,10 +650,10 @@ They receive the note as a system-level instruction with strict orders never to 
 </details>
 
 <details>
-<summary><strong>Why is the LM Studio default port 6969?</strong></summary>
+<summary><strong>Why was the LM Studio default port 6969?</strong></summary>
 <br>
 
-History. Do not ask further questions.
+History. It has since been reformed to a respectable 1234, but the server-side fallback remembers. Do not ask further questions.
 
 </details>
 

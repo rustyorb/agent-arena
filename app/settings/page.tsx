@@ -18,6 +18,14 @@ interface ProviderConfig {
   url: string;
   defaultUrl: string;
   modelCount: number;
+  isCustom?: boolean;
+}
+
+// User-defined OpenAI-compatible providers (vLLM, LocalAI, text-gen-webui, ...)
+interface CustomProviderDef {
+  id: string;
+  name: string;
+  url: string;
 }
 
 // Standard vendor defaults, editable per-browser (stored in localStorage `agent-arena-urls`)
@@ -51,22 +59,40 @@ const INITIAL_PROVIDERS: ProviderConfig[] = [
 export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderConfig[]>(INITIAL_PROVIDERS);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [newName, setNewName] = useState("");
+  const [newUrl, setNewUrl] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load saved keys + URL overrides from localStorage
+    // Load saved keys + URL overrides + custom providers from localStorage
     const saved = localStorage.getItem("agent-arena-keys");
     const savedUrls = localStorage.getItem("agent-arena-urls");
+    const savedCustom = localStorage.getItem("agent-arena-custom-providers");
     const keys = saved ? JSON.parse(saved) : {};
     const urls = savedUrls ? JSON.parse(savedUrls) : {};
-    setProviders((prev) =>
-      prev.map((p) => ({
+    const customDefs: CustomProviderDef[] = savedCustom ? JSON.parse(savedCustom) : [];
+
+    const customConfigs: ProviderConfig[] = customDefs.map((c) => ({
+      id: c.id,
+      name: c.name,
+      requiresKey: false,
+      status: (keys[c.id] ? "valid" : "unconfigured") as ProviderStatus,
+      key: keys[c.id] || "",
+      url: urls[c.id] || c.url,
+      defaultUrl: c.url,
+      modelCount: 0,
+      isCustom: true,
+    }));
+
+    setProviders([
+      ...INITIAL_PROVIDERS.map((p) => ({
         ...p,
         key: keys[p.id] || "",
         url: urls[p.id] || p.defaultUrl,
-        status: keys[p.id] ? "valid" : "unconfigured",
-      }))
-    );
+        status: (keys[p.id] ? "valid" : "unconfigured") as ProviderStatus,
+      })),
+      ...customConfigs,
+    ]);
 
     // Check local providers with their saved URLs
     checkLocalProviders(urls);
@@ -163,6 +189,59 @@ export default function SettingsPage() {
     );
   };
 
+  const addCustomProvider = () => {
+    const name = newName.trim();
+    const url = newUrl.trim().replace(/\/+$/, "");
+    if (!name || !url) return;
+
+    const id = `custom-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+    if (!id.slice(7) || providers.some((p) => p.id === id)) {
+      toast({ title: "Error", description: "A provider with that name already exists.", variant: "destructive" });
+      return;
+    }
+
+    const defs: CustomProviderDef[] = JSON.parse(localStorage.getItem("agent-arena-custom-providers") || "[]");
+    defs.push({ id, name, url });
+    localStorage.setItem("agent-arena-custom-providers", JSON.stringify(defs));
+
+    setProviders((prev) => [
+      ...prev,
+      {
+        id,
+        name,
+        requiresKey: false,
+        status: "unconfigured",
+        key: "",
+        url,
+        defaultUrl: url,
+        modelCount: 0,
+        isCustom: true,
+      },
+    ]);
+    setNewName("");
+    setNewUrl("");
+    toast({ title: "Added", description: `${name} added — hit Test & Fetch Models to connect.` });
+  };
+
+  const removeCustomProvider = (providerId: string) => {
+    const defs: CustomProviderDef[] = JSON.parse(localStorage.getItem("agent-arena-custom-providers") || "[]");
+    localStorage.setItem(
+      "agent-arena-custom-providers",
+      JSON.stringify(defs.filter((d) => d.id !== providerId))
+    );
+
+    // Clean up its key, URL override, and cached models
+    const keys = JSON.parse(localStorage.getItem("agent-arena-keys") || "{}");
+    delete keys[providerId];
+    localStorage.setItem("agent-arena-keys", JSON.stringify(keys));
+    const urls = JSON.parse(localStorage.getItem("agent-arena-urls") || "{}");
+    delete urls[providerId];
+    localStorage.setItem("agent-arena-urls", JSON.stringify(urls));
+    localStorage.removeItem(`models-${providerId}`);
+
+    setProviders((prev) => prev.filter((p) => p.id !== providerId));
+  };
+
   const getStatusBadge = (status: ProviderStatus, modelCount: number) => {
     switch (status) {
       case "valid":
@@ -189,18 +268,35 @@ export default function SettingsPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">{provider.name}</CardTitle>
-                {getStatusBadge(provider.status, provider.modelCount)}
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(provider.status, provider.modelCount)}
+                  {provider.isCustom && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                      title="Remove provider"
+                      onClick={() => removeCustomProvider(provider.id)}
+                    >
+                      ✕
+                    </Button>
+                  )}
+                </div>
               </div>
               <CardDescription>
-                {provider.requiresKey ? "Requires API key" : "Local provider"}
+                {provider.isCustom
+                  ? "Custom OpenAI-compatible"
+                  : provider.requiresKey
+                    ? "Requires API key"
+                    : "Local provider"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {provider.requiresKey && (
+              {(provider.requiresKey || provider.isCustom) && (
                 <div className="flex gap-2">
                   <Input
                     type={showKeys[provider.id] ? "text" : "password"}
-                    placeholder="API Key"
+                    placeholder={provider.isCustom ? "API Key (optional)" : "API Key"}
                     value={provider.key}
                     onChange={(e) => updateKey(provider.id, e.target.value)}
                   />
@@ -245,6 +341,43 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         ))}
+
+        {/* Add custom OpenAI-compatible provider */}
+        <Card className="border-dashed">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">＋ Add Custom Provider</CardTitle>
+            <CardDescription>
+              Any OpenAI-compatible API — vLLM, LocalAI, text-gen-webui, llama.cpp, LiteLLM…
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Input
+              placeholder="Name (e.g., My vLLM Box)"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <Input
+              className="font-mono text-xs"
+              placeholder="Base URL (e.g., http://192.168.0.50:8000/v1)"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCustomProvider();
+                }
+              }}
+            />
+            <Button
+              onClick={addCustomProvider}
+              disabled={!newName.trim() || !newUrl.trim()}
+              variant="outline"
+              className="w-full"
+            >
+              Add Provider
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

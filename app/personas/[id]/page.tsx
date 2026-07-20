@@ -87,7 +87,13 @@ export default function PersonaEditorPage() {
   const loadModels = () => {
     const allModels = []
     const providers = ['openrouter', 'anthropic', 'openai', 'xai', 'openclaw', 'lmstudio', 'ollama']
-    
+
+    // Include user-defined custom providers from /settings
+    try {
+      const customDefs = JSON.parse(localStorage.getItem('agent-arena-custom-providers') || '[]')
+      providers.push(...customDefs.map((c: { id: string }) => c.id))
+    } catch {}
+
     for (const provider of providers) {
       const stored = localStorage.getItem(`models-${provider}`)
       if (stored) {

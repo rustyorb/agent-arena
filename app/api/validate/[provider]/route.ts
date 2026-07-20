@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveProvider, ProviderId } from "@/lib/providers";
+import { resolveProvider } from "@/lib/providers";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { provider: string } }
 ) {
-  const providerId = params.provider as ProviderId;
+  const providerId = params.provider;
 
   try {
     const body = await request.json().catch(() => ({}));
