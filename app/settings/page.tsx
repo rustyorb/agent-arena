@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ConductorSettings, DEFAULT_CONDUCTOR, resolveConductor } from "@/lib/conductor";
 
 type ProviderStatus = "unconfigured" | "testing" | "valid" | "invalid";
 
@@ -61,6 +64,7 @@ export default function SettingsPage() {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [conductor, setConductor] = useState<ConductorSettings>(DEFAULT_CONDUCTOR);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -94,9 +98,27 @@ export default function SettingsPage() {
       ...customConfigs,
     ]);
 
+    // Load Prompt Lab (conductor) settings
+    try {
+      setConductor(resolveConductor(JSON.parse(localStorage.getItem("agent-arena-conductor") || "{}")));
+    } catch {}
+
     // Check local providers with their saved URLs
     checkLocalProviders(urls);
   }, []);
+
+  const saveConductor = () => {
+    const resolved = resolveConductor(conductor);
+    setConductor(resolved);
+    localStorage.setItem("agent-arena-conductor", JSON.stringify(resolved));
+    toast({ title: "Saved", description: "Prompt Lab settings apply to every new turn." });
+  };
+
+  const resetConductor = () => {
+    setConductor(DEFAULT_CONDUCTOR);
+    localStorage.removeItem("agent-arena-conductor");
+    toast({ title: "Reset", description: "Prompt Lab restored to defaults." });
+  };
 
   const checkLocalProviders = async (urls: Record<string, string>) => {
     for (const id of ["lmstudio", "ollama"]) {
@@ -379,6 +401,93 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Prompt Lab: the orchestration prompts + context knobs */}
+      <Card className="border-emerald-500/40">
+        <CardHeader>
+          <CardTitle>🎛️ Prompt Lab</CardTitle>
+          <CardDescription>
+            The hidden prompts that conduct every conversation — tune them to fight repetition,
+            change pacing, or reshape the vibe entirely. Applies to all new turns.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label>History depth (messages each persona sees)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={500}
+                value={conductor.historyDepth}
+                onChange={(e) =>
+                  setConductor((c) => ({ ...c, historyDepth: parseInt(e.target.value) || 0 }))
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Low values cause amnesia and repetition. Keep it ≥ your message cap for full recall.
+              </p>
+            </div>
+            <div>
+              <Label>Message cap (debate turns before auto-stop)</Label>
+              <Input
+                type="number"
+                min={2}
+                max={500}
+                value={conductor.messageCap}
+                onChange={(e) =>
+                  setConductor((c) => ({ ...c, messageCap: parseInt(e.target.value) || 0 }))
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Judge verdicts and human messages don&apos;t count against the cap.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <Label>Opening prompt — first turn ({"{topic}"} is replaced)</Label>
+            <Textarea
+              rows={2}
+              value={conductor.openingPrompt}
+              onChange={(e) => setConductor((c) => ({ ...c, openingPrompt: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <Label>Turn prompt — every turn after the first</Label>
+            <Textarea
+              rows={3}
+              value={conductor.turnPrompt}
+              onChange={(e) => setConductor((c) => ({ ...c, turnPrompt: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              This is your main anti-repetition lever — demand novelty, reactions, escalation.
+            </p>
+          </div>
+
+          <div>
+            <Label>Style rules — appended to every persona&apos;s system prompt</Label>
+            <Textarea
+              rows={2}
+              value={conductor.styleSuffix}
+              onChange={(e) => setConductor((c) => ({ ...c, styleSuffix: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Leave empty to let each persona&apos;s own system prompt stand alone.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={saveConductor} className="flex-1">
+              Save Prompt Lab
+            </Button>
+            <Button onClick={resetConductor} variant="outline">
+              Reset to defaults
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

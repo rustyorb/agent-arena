@@ -2,14 +2,17 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveProvider } from "@/lib/providers";
 import { TurnManager } from "@/lib/orchestrator/turn-manager";
+import { resolveConductor } from "@/lib/conductor";
 
 // POST /api/chat
 // Executes the next turn of a conversation, server-orchestrated.
-// Body: { conversationId, apiKeys: Record<providerId, string>, apiUrls?: Record<providerId, string>, whisper?: { personaId, note } }
+// Body: { conversationId, apiKeys: Record<providerId, string>, apiUrls?: Record<providerId, string>,
+//         whisper?: { personaId, note }, conductor?: Partial<ConductorSettings> }
 // Streams SSE events: { type: 'persona' | 'content' | 'done' | 'error', data }
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { conversationId, apiKeys = {}, apiUrls = {}, whisper } = body;
+  const conductor = resolveConductor(body.conductor);
 
   if (!conversationId) {
     return new Response("Missing conversationId", { status: 400 });
@@ -54,6 +57,7 @@ export async function POST(request: NextRequest) {
     topic: conversation.topic,
     personas: combatants,
     history,
+    conductor,
   });
 
   const speaker = turnManager.getNextSpeaker();

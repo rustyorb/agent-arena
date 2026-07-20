@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast'
 import { ChatStats } from '@/components/chat-stats'
 import { Scoreboard, ScoreboardData } from '@/components/scoreboard'
 import { speak, stopSpeaking, initVoices, isSpeechSupported } from '@/lib/voice'
+import { resolveConductor, ConductorSettings } from '@/lib/conductor'
 
 interface Message {
   id: string
@@ -68,7 +69,15 @@ interface Conversation {
   messages: Message[]
 }
 
-const MESSAGE_CAP = 20
+// Conductor settings (history depth, message cap, prompts) come from the
+// Prompt Lab on /settings, stored in localStorage `agent-arena-conductor`.
+function getConductor(): ConductorSettings {
+  try {
+    return resolveConductor(JSON.parse(localStorage.getItem('agent-arena-conductor') || '{}'))
+  } catch {
+    return resolveConductor()
+  }
+}
 
 export default function ChatPage() {
   const params = useParams()
@@ -164,7 +173,7 @@ export default function ChatPage() {
       !judging &&
       conversation &&
       conversation.messages.length > 0 &&
-      debateCount(conversation.messages) < MESSAGE_CAP
+      debateCount(conversation.messages) < getConductor().messageCap
     ) {
       autoContinueTimerRef.current = setTimeout(() => {
         handleStart()
@@ -256,6 +265,7 @@ export default function ChatPage() {
           conversationId: conversation.id,
           apiKeys: getApiKeys(),
           apiUrls: getApiUrls(),
+          conductor: getConductor(),
           ...(whisper && { whisper }),
         }),
         signal: controller.signal,

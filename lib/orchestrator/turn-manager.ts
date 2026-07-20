@@ -1,4 +1,5 @@
 import { ChatMessage } from '../providers/types'
+import { ConductorSettings, DEFAULT_CONDUCTOR } from '../conductor'
 
 export interface Message {
   id: string
@@ -26,6 +27,7 @@ export interface TurnManagerConfig {
   topic: string
   personas: Persona[]
   history: Message[]
+  conductor?: ConductorSettings
 }
 
 export class TurnManager {
@@ -33,6 +35,7 @@ export class TurnManager {
   private topic: string
   private personas: Persona[]
   private history: Message[]
+  private conductor: ConductorSettings
   private currentIndex: number = 0
 
   constructor(config: TurnManagerConfig) {
@@ -40,6 +43,7 @@ export class TurnManager {
     this.topic = config.topic
     this.personas = config.personas
     this.history = config.history
+    this.conductor = config.conductor || DEFAULT_CONDUCTOR
   }
 
   getNextSpeaker(): Persona {
@@ -65,8 +69,8 @@ export class TurnManager {
       content: this.buildSystemPrompt(persona)
     })
 
-    // Add conversation history (last 10 messages for context)
-    const recentHistory = this.history.slice(-10)
+    // Add conversation history (recent window, size set by the Conductor)
+    const recentHistory = this.history.slice(-this.conductor.historyDepth)
     for (const msg of recentHistory) {
       messages.push({
         role: msg.personaId === persona.id ? 'assistant' : 'user',
@@ -78,12 +82,12 @@ export class TurnManager {
     if (this.history.length === 0) {
       messages.push({
         role: 'user',
-        content: `You are discussing: "${this.topic}". Start the conversation with your perspective.`
+        content: this.conductor.openingPrompt.replace('{topic}', this.topic)
       })
     } else {
       messages.push({
         role: 'user',
-        content: `It's your turn to respond. Continue the discussion.`
+        content: this.conductor.turnPrompt
       })
     }
 
@@ -91,8 +95,7 @@ export class TurnManager {
   }
 
   shouldContinue(): boolean {
-    // Simple rule: stop after 20 messages
-    return this.history.length < 20
+    return this.history.length < this.conductor.messageCap
   }
 
   private buildSystemPrompt(persona: Persona): string {
@@ -102,7 +105,9 @@ export class TurnManager {
       prompt += `\n\nYour position in this debate: ${persona.position}`
     }
 
-    prompt += '\n\nIMPORTANT: Keep your responses concise (2-3 paragraphs max). Be direct and engaging.'
+    if (this.conductor.styleSuffix.trim()) {
+      prompt += `\n\n${this.conductor.styleSuffix}`
+    }
 
     return prompt
   }
